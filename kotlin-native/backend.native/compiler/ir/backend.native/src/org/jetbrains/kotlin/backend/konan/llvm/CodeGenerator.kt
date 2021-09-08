@@ -49,8 +49,17 @@ internal fun IrClass.hasConstStateAndNoSideEffects(context: Context): Boolean {
 
 internal class CodeGenerator(override val context: Context) : ContextUtils {
 
-    fun llvmFunction(function: IrFunction): LLVMValueRef = llvmFunctionOrNull(function) ?: error("no function ${function.name} in ${function.file.fqName}")
-    fun llvmFunctionOrNull(function: IrFunction): LLVMValueRef? = function.llvmFunctionOrNull
+    fun llvmFunction(function: IrFunction): LLVMValueRef =
+            functionDeclarationsOrNull(function)?.llvmFunction
+                    ?: error("no function ${function.name} in ${function.file.fqName}")
+
+    fun functionDeclarations(function: IrFunction): FunctionLlvmDeclarations =
+            functionDeclarationsOrNull(function)
+                    ?: error("no function ${function.name} in ${function.file.fqName}")
+
+    fun functionDeclarationsOrNull(function: IrFunction): FunctionLlvmDeclarations? =
+            function.llvmDeclarationsOrNull
+
     val intPtrType = LLVMIntPtrTypeInContext(llvmContext, llvmTargetData)!!
     internal val immOneIntPtrType = LLVMConstInt(intPtrType, 1, 1)!!
     internal val immThreeIntPtrType = LLVMConstInt(intPtrType, 3, 1)!!
@@ -481,7 +490,7 @@ internal abstract class FunctionGenerationContext(
     /**
      * TODO: consider merging this with [ExceptionHandler].
      */
-    var forwardingForeignExceptionsTerminatedWith: LLVMValueRef? = null
+    var forwardingForeignExceptionsTerminatedWith: FunctionLlvmDeclarations? = null
 
     // Whether the generating function needs to initialize Kotlin runtime before execution. Useful for interop bridges,
     // for example.
@@ -638,10 +647,18 @@ internal abstract class FunctionGenerationContext(
                             Int32(size).llvm,
                             Int1(isVolatile).llvm))
 
+    fun call(llvmDeclarations: FunctionLlvmDeclarations, args: List<LLVMValueRef>,
+             resultLifetime: Lifetime = Lifetime.IRRELEVANT,
+             exceptionHandler: ExceptionHandler = ExceptionHandler.None,
+             verbatim: Boolean = false): LLVMValueRef =
+            call(llvmDeclarations.llvmFunction, args, resultLifetime, exceptionHandler, verbatim, llvmDeclarations.prototype)
+
     fun call(llvmFunction: LLVMValueRef, args: List<LLVMValueRef>,
              resultLifetime: Lifetime = Lifetime.IRRELEVANT,
              exceptionHandler: ExceptionHandler = ExceptionHandler.None,
-             verbatim: Boolean = false): LLVMValueRef {
+             verbatim: Boolean = false,
+             attributeProvider: LlvmCallSiteAttributeProvider? = null
+    ): LLVMValueRef {
         val callArgs = if (verbatim || !isObjectReturn(llvmFunction.type)) {
             args
         } else {
@@ -668,7 +685,9 @@ internal abstract class FunctionGenerationContext(
             }
             args + resultSlot
         }
-        return callRaw(llvmFunction, callArgs, exceptionHandler)
+        return callRaw(llvmFunction, callArgs, exceptionHandler).also {
+            attributeProvider?.addCallSiteAttributes(it)
+        }
     }
 
     private fun callRaw(llvmFunction: LLVMValueRef, args: List<LLVMValueRef>,
@@ -858,7 +877,7 @@ internal abstract class FunctionGenerationContext(
             LLVMBuildExtractValue(builder, aggregate, index, name)!!
 
     fun gxxLandingpad(numClauses: Int, name: String = ""): LLVMValueRef {
-        val personalityFunction = context.llvm.gxxPersonalityFunction
+        val personalityFunction = context.llvm.gxxPersonalityFunction.llvmFunction
 
         // Type of `landingpad` instruction result (depends on personality function):
         val landingpadType = structType(int8TypePtr, int32Type)
@@ -1000,7 +1019,7 @@ internal abstract class FunctionGenerationContext(
         val exceptionRawPtr = call(context.llvm.cxaBeginCatchFunction, listOf(exceptionRecord))
 
         // This will take care of ARC - need to be done in the catching scope, i.e. before __cxa_end_catch
-        val exception = call(context.ir.symbols.createForeignException.owner.llvmFunction,
+        val exception = call(context.ir.symbols.createForeignException.owner.llvmDeclarations,
                 listOf(exceptionRawPtr),
                 Lifetime.GLOBAL, exceptionHandler)
 
@@ -1187,7 +1206,7 @@ internal abstract class FunctionGenerationContext(
             if (parent.isObjCClass()) {
                 // TODO: cache it too.
                 return call(
-                        codegen.llvmFunction(context.ir.symbols.interopInterpretObjCPointer.owner),
+                        codegen.functionDeclarations(context.ir.symbols.interopInterpretObjCPointer.owner),
                         listOf(getObjCClass(parent, exceptionHandler)),
                         Lifetime.GLOBAL,
                         exceptionHandler
@@ -1312,12 +1331,12 @@ internal abstract class FunctionGenerationContext(
                 val name = irClass.descriptor.getExternalObjCMetaClassBinaryName()
                 val objCClass = getObjCClass(name, llvmSymbolOrigin)
 
-                val getClass = context.llvm.externalFunction(
+                val getClass = context.llvm.externalFunction(LlvmFunctionProto(
                         "object_getClass",
-                        functionType(int8TypePtr, false, int8TypePtr),
+                        LlvmParameter(int8TypePtr),
+                        listOf(LlvmParameter(int8TypePtr)),
                         origin = context.standardLlvmSymbolsOrigin
-                )
-
+                ))
                 call(getClass, listOf(objCClass), exceptionHandler = exceptionHandler)
             } else {
                 getObjCClass(irClass.descriptor.getExternalObjCClassBinaryName(), llvmSymbolOrigin)
@@ -1522,7 +1541,7 @@ internal abstract class FunctionGenerationContext(
         handleEpilogueForExperimentalMM(context.llvm.Kotlin_mm_safePointFunctionEpilogue)
     }
 
-    private fun handleEpilogueForExperimentalMM(safePointFunction: LLVMValueRef) {
+    private fun handleEpilogueForExperimentalMM(safePointFunction: FunctionLlvmDeclarations) {
         if (context.memoryModel == MemoryModel.EXPERIMENTAL) {
             if (!forbidRuntime) {
                 call(safePointFunction, emptyList())
