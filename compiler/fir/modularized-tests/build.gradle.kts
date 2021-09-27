@@ -63,7 +63,8 @@ projectTest {
             jvmArgs(paramRegex.findAll(argsExt).map { it.groupValues[1] }.toList())
         }
     }
-    jvmArgs("-XX:ReservedCodeCacheSize=512m")
+    jvmArgs("-XX:ReservedCodeCacheSize=1024m")
+    jvmArgs("-XX:+PrintCodeCache")
 }
 
 testsJar()
