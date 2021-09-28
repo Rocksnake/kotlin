@@ -842,6 +842,7 @@ open class RawFirBuilder(
                 origin = FirDeclarationOrigin.Source
                 returnTypeRef = delegatedSelfTypeRef
                 this.status = status
+                dispatchReceiverType = dispatchReceiverForClassConstructor(owner)
                 symbol = FirConstructorSymbol(callableIdForClassConstructor())
                 delegatedConstructor = firDelegatedCall
                 typeParameters += constructorTypeParametersFromConstructedClass(ownerTypeParameters)
@@ -1382,6 +1383,7 @@ open class RawFirBuilder(
                     isFromSealedClass = owner.hasModifier(SEALED_KEYWORD) && explicitVisibility !== Visibilities.Private
                     isFromEnumClass = owner.hasModifier(ENUM_KEYWORD)
                 }
+                dispatchReceiverType = dispatchReceiverForClassConstructor(owner)
                 symbol = FirConstructorSymbol(callableIdForClassConstructor())
                 delegatedConstructor = getDelegationCall().convert(
                     delegatedSuperTypeRef,
