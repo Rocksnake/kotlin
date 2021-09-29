@@ -30,11 +30,11 @@ internal class NativeInlineFunctionResolver(override val context: Context) : Def
             return function
 
         val packageFragment = function.findPackage()
-        val functionFromCache = function.findPackage() is IrExternalPackageFragment
-        if (!functionFromCache) {
+        if (packageFragment !is IrExternalPackageFragment) {
             context.specialDeclarationsFactory.loweredInlineFunctions[function] =
                     InlineFunctionInfo(function.file, function.startOffset, function.endOffset)
         } else {
+            // The function is from Lazy IR, get its body from the IR linker.
             val moduleDescriptor = packageFragment.packageFragmentDescriptor.containingDeclaration
             val moduleDeserializer = context.irLinker!!.cachedLibraryModuleDeserializers[moduleDescriptor]
                     ?: error("No module deserializer for ${function.render()}")
@@ -57,7 +57,7 @@ internal class NativeInlineFunctionResolver(override val context: Context) : Def
 
         LocalClassesInInlineLambdasLowering(context).lower(body, function)
 
-        if (!functionFromCache) {
+        if (context.llvmModuleSpecification.containsPackageFragment(packageFragment)) {
             // Do not extract local classes off of inline functions from cached libraries.
             LocalClassesInInlineFunctionsLowering(context).lower(body, function)
             LocalClassesExtractionFromInlineFunctionsLowering(context).lower(body, function)
