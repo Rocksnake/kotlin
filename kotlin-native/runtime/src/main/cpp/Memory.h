@@ -18,6 +18,7 @@
 #define RUNTIME_MEMORY_H
 
 #include <utility>
+#include <functional>
 
 #include "KAssert.h"
 #include "Common.h"
@@ -120,6 +121,7 @@ ALWAYS_INLINE inline bool isNullOrMarker(const ObjHeader* obj) noexcept {
 }
 
 class ForeignRefManager;
+struct FrameOverlay;
 typedef ForeignRefManager* ForeignRefContext;
 
 #ifdef __cplusplus
@@ -239,6 +241,10 @@ OBJ_GETTER(ReadHeapRefNoLock, ObjHeader* object, int32_t index);
 void EnterFrame(ObjHeader** start, int parameters, int count) RUNTIME_NOTHROW;
 // Called on frame leave, if it has object slots.
 void LeaveFrame(ObjHeader** start, int parameters, int count) RUNTIME_NOTHROW;
+// Set current frame in case if exception caught.
+void SetCurrentFrame(ObjHeader** start) RUNTIME_NOTHROW;
+FrameOverlay* getCurrentFrame() RUNTIME_NOTHROW;
+
 // Clears object subgraph references from memory subsystem, and optionally
 // checks if subgraph referenced by given root is disjoint from the rest of
 // object graph, i.e. no external references exists.
@@ -433,6 +439,20 @@ ALWAYS_INLINE inline void AssertThreadState(std::initializer_list<ThreadState> e
     if (compiler::runtimeAssertsMode() != compiler::RuntimeAssertsMode::kIgnore) {
         AssertThreadState(mm::GetMemoryState(), expected);
     }
+}
+
+ALWAYS_INLINE RUNTIME_NODEBUG inline void runWithCatchExceptionObjHolder(std::function<void()> process, std::function<void(ExceptionObjHolder&)> catchAction) {
+#if !KONAN_NO_EXCEPTIONS
+    FrameOverlay* currentFrame = getCurrentFrame();
+    try {
+        process();
+    } catch (ExceptionObjHolder& e) {
+        SetCurrentFrame(reinterpret_cast<ObjHeader**>(currentFrame));
+        catchAction(e);
+    }
+#else
+    RuntimeFail("Exceptions aren't supported!\n");
+#endif
 }
 
 // Scopely sets the given thread state for the given thread.
