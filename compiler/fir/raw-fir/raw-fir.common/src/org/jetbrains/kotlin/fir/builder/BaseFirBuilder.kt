@@ -132,11 +132,6 @@ abstract class BaseFirBuilder<T>(val baseSession: FirSession, val context: Conte
     fun currentDispatchReceiverType(): ConeClassLikeType? = context.dispatchReceiverTypesStack.lastOrNull()
 
     /**
-     * @return second from the end dispatch receiver. For the inner class constructor it would be the outer class.
-     */
-    protected fun dispatchReceiverForInnerClassConstructor() = context.dispatchReceiverTypesStack.dropLast(1).lastOrNull()
-
-    /**
      * @param clazz A class for which constructors to compute the dispatcher for.
      * @return For the inner class returns the outer class if it exists. Otherwise, returns null.
      */
