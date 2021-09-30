@@ -142,7 +142,8 @@ abstract class BaseFirBuilder<T>(val baseSession: FirSession, val context: Conte
      */
     protected fun dispatchReceiverForClassConstructor(clazz: KtClassOrObject): ConeClassLikeType? {
         return if (clazz.hasModifier(INNER_KEYWORD)) {
-            context.dispatchReceiverTypesStack.dropLast(1).lastOrNull()
+            val outerClassIndex = context.dispatchReceiverTypesStack.lastIndex - 1
+            context.dispatchReceiverTypesStack.getOrNull(outerClassIndex)
         } else {
             null
         }
