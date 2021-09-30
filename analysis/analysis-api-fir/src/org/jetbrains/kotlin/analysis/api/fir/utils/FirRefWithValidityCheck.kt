@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.analysis.api.tokens.assertIsValidAndAccessible
 import org.jetbrains.kotlin.analysis.low.level.api.fir.api.FirModuleResolveState
 import org.jetbrains.kotlin.analysis.low.level.api.fir.api.withFirDeclaration
 import org.jetbrains.kotlin.analysis.low.level.api.fir.lazy.resolve.ResolveType
+import org.jetbrains.kotlin.analysis.low.level.api.fir.realFirOrSelf
 import org.jetbrains.kotlin.fir.declarations.FirDeclaration
 import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
 
@@ -22,7 +23,7 @@ internal class FirRefWithValidityCheck<out D : FirDeclaration>(
 
     inline fun <R> withFir(phase: FirResolvePhase = FirResolvePhase.RAW_FIR, crossinline action: (fir: D) -> R): R {
         token.assertIsValidAndAccessible()
-        return fir.withFirDeclaration(resolveState, phase) { action(it) }
+        return fir.realFirOrSelf.withFirDeclaration(resolveState, phase) { action(it) }
     }
 
     /**
@@ -32,7 +33,7 @@ internal class FirRefWithValidityCheck<out D : FirDeclaration>(
      */
     inline fun <R> withFirUnsafe(action: (fir: D) -> R): R {
         token.assertIsValidAndAccessible()
-        return action(fir)
+        return action(fir.realFirOrSelf)
     }
 
     inline fun <R> withFirAndCache(phase: FirResolvePhase = FirResolvePhase.RAW_FIR, crossinline createValue: (fir: D) -> R) =
@@ -42,7 +43,7 @@ internal class FirRefWithValidityCheck<out D : FirDeclaration>(
 
     inline fun <R> withFirByType(type: ResolveType, crossinline action: (fir: D) -> R): R {
         token.assertIsValidAndAccessible()
-        return fir.withFirDeclaration(type, resolveState) { action(it) }
+        return fir.realFirOrSelf.withFirDeclaration(type, resolveState) { action(it) }
     }
 
     inline fun <R> withFirAndCache(type: ResolveType, crossinline createValue: (fir: D) -> R) =
