@@ -1,6 +1,7 @@
 // DONT_TARGET_EXACT_BACKEND: WASM
 // WASM_MUTE_REASON: IGNORED_IN_JS
 // IGNORE_BACKEND: JS
+// !LANGUAGE: +JsAllowInvalidCharsIdentifiersEscaping
 
 // Names with spaces are not valid according to the dex specification
 // before DEX version 040. Therefore, do not attempt to dex the resulting
