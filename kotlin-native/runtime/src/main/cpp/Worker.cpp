@@ -1051,12 +1051,12 @@ JobKind Worker::processQueueElement(bool blocking) {
     case JOB_EXECUTE_AFTER: {
       ObjHolder operationHolder, dummyHolder;
       KRef obj = DerefStablePointer(job.executeAfter.operation, operationHolder.slot());
-      runWithCatchExceptionObjHolder([&]() {
-          #if KONAN_OBJC_INTEROP
-            konan::AutoreleasePool autoreleasePool;
-          #endif
-            WorkerLaunchpad(obj, dummyHolder.slot());
-      }, [&](ExceptionObjHolder& e) {
+      try {
+        #if KONAN_OBJC_INTEROP
+          konan::AutoreleasePool autoreleasePool;
+        #endif
+          WorkerLaunchpad(obj, dummyHolder.slot());
+      } catch(ExceptionObjHolder& e) {
         switch (exceptionHandling()) {
           case WorkerExceptionHandling::kIgnore: break;
           case WorkerExceptionHandling::kDefault:
@@ -1066,7 +1066,7 @@ JobKind Worker::processQueueElement(bool blocking) {
               ReportUnhandledException(e.GetExceptionObject());
               break;
         }
-      });
+      }
 
       DisposeStablePointer(job.executeAfter.operation);
       break;
@@ -1077,7 +1077,12 @@ JobKind Worker::processQueueElement(bool blocking) {
       ObjHolder argumentHolder;
       ObjHolder resultHolder;
       KRef argument = AdoptStablePointer(job.regularJob.argument, argumentHolder.slot());
-      runWithCatchExceptionObjHolder([&]() {
+      #if !KONAN_NO_EXCEPTIONS
+        FrameOverlay* currentFrame = getCurrentFrame();
+      #else
+        RuntimeFail("Exceptions aren't supported!\n");
+      #endif
+      try {
         #if KONAN_OBJC_INTEROP
           konan::AutoreleasePool autoreleasePool;
         #endif
@@ -1085,7 +1090,8 @@ JobKind Worker::processQueueElement(bool blocking) {
           argumentHolder.clear();
           // Transfer the result.
           result = transfer(&resultHolder, job.regularJob.transferMode);
-      }, [&](ExceptionObjHolder& e) {
+      } catch (ExceptionObjHolder& e) {
+        SetCurrentFrame(reinterpret_cast<ObjHeader**>(currentFrame));
         ok = false;
         switch (exceptionHandling()) {
             case WorkerExceptionHandling::kIgnore:
@@ -1095,7 +1101,7 @@ JobKind Worker::processQueueElement(bool blocking) {
                 ReportUnhandledException(e.GetExceptionObject());
                 break;
         }
-      });
+      }
       // Notify the future.
       job.regularJob.future->storeResultUnlocked(result, ok);
       break;
