@@ -30,9 +30,11 @@ class IrLazySymbolTable(private val originalTable: SymbolTable) : ReferenceSymbo
     }
 
     override fun referenceTypeAlias(descriptor: TypeAliasDescriptor): IrTypeAliasSymbol {
-        return originalTable.referenceTypeAlias(descriptor).also {
-            if (!it.isBound) {
-                stubGenerator?.generateTypeAliasStub(descriptor)
+        synchronized(lock) {
+            return originalTable.referenceTypeAlias(descriptor).also {
+                if (!it.isBound) {
+                    stubGenerator?.generateTypeAliasStub(descriptor)
+                }
             }
         }
     }
@@ -68,9 +70,11 @@ class IrLazySymbolTable(private val originalTable: SymbolTable) : ReferenceSymbo
     }
 
     override fun referenceProperty(descriptor: PropertyDescriptor): IrPropertySymbol {
-        return originalTable.referenceProperty(descriptor).also {
-            if (!it.isBound) {
-                stubGenerator?.generatePropertyStub(descriptor)
+        synchronized(lock) {
+            return originalTable.referenceProperty(descriptor).also {
+                if (!it.isBound) {
+                    stubGenerator?.generatePropertyStub(descriptor)
+                }
             }
         }
     }
