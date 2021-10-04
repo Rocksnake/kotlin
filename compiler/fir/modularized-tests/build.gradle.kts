@@ -65,6 +65,9 @@ projectTest {
     }
     jvmArgs("-XX:ReservedCodeCacheSize=1024m")
     jvmArgs("-XX:+PrintCodeCache")
+    jvmArgs("-XX:+UnlockDiagnosticVMOptions")
+    jvmArgs("-XX:+LogCompilation")
+    jvmArgs("-XX:LogFile=tmp/jit-logs/hotspot.log")
 }
 
 testsJar()
